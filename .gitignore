@@ -1,0 +1,41 @@
+# Node dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+*.log
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# WebStorm / IntelliJ project files
+.idea/
+*.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.swp
+
+# Yarn / npm logs
+yarn-error.log
+npm-debug.log
+pnpm-debug.log
+
+# Package manager lock files (optional, if you don't want to commit)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

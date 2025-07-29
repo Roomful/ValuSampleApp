@@ -1,0 +1,181 @@
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 85.7% 97.3%;
+
+    --ring: 217.2 32.6% 17.5%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.font-mono {
+  font-family: "Fira Code", monospace;
+}
+
+.console-output h1 {
+  color: #e6e6e6;
+  font-size: 1.2em;
+  margin-bottom: 0.5em;
+}
+
+.console-output p {
+  margin-bottom: 0.5em;
+}
+
+.console-output strong {
+  font-weight: bold;
+  color: #ffd700;
+}
+
+.console-output em {
+  font-style: italic;
+  color: #ff69b4;
+}
+
+.console-output ul {
+  list-style-type: disc;
+  margin-left: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.console-output li {
+  margin-bottom: 0.25em;
+}
+
+.console-output code {
+  background-color: #333;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: "Fira Code", monospace;
+}
+
+.console-output pre {
+  background-color: #1a1a1a;
+  padding: 0.5em;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin-bottom: 0.5em;
+}
+
+.console-output pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+
+
+.prose {
+  --tw-prose-body: #333;
+  --tw-prose-headings: #1a202c;
+  --tw-prose-links: #3182ce;
+  --tw-prose-links-hover: #2b6cb0;
+  --tw-prose-bold: #2d3748;
+  --tw-prose-code: #e53e3e;
+}
+
+.prose h1 {
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding-top: 0.7rem;
+}
+
+.prose h2 {
+  font-size: 1rem;
+  font-weight: bold;
+  padding-top: 0.5rem;
+}
+
+.prose p {
+  @apply text-lg leading-relaxed;
+}
+
+.prose a {
+  @apply underline hover:text-blue-600;
+}
+
+.prose code {
+  color: #22d3ee;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background-color: rgba(45, 55, 72, 1);
+}
+
+.prose pre {
+  @apply p-1 rounded-lg overflow-auto;
+}
+
+.prose pre {
+  background-color: rgba(45, 55, 72, 1);
+}
