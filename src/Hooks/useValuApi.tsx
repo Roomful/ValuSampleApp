@@ -1,27 +1,30 @@
-import {useEffect, useRef, useState} from "react";
-import {ValuApi} from "@arkeytyp/valu-api";
+import { useEffect, useState } from "react";
+import { ValuApi } from "@arkeytyp/valu-api";
 
-
+declare global {
+    interface GlobalThis {
+        valuApi?: ValuApi;
+    }
+}
 
 export const useValuAPI = (): ValuApi | null => {
-    const [valuApi, setValuApi] = useState(null);
+    const [valuApi, setValuApi] = useState<ValuApi | null>(null);
 
     useEffect(() => {
-
-        let valuApi;
-        if( typeof globalThis['valuApi'] !== 'undefined' )  {
-            valuApi = globalThis['valuApi'];
-        } else {
-            valuApi = globalThis['valuApi'] =  new ValuApi();
+        // use dot notation and cast to any for globalThis
+        let api = (globalThis as any).valuApi as ValuApi | undefined;
+        if (!api) {
+            api = (globalThis as any).valuApi = new ValuApi();
         }
 
-        if(valuApi.connected) {
-            setValuApi(valuApi);
+        if (api.connected) {
+            setValuApi(api);
         } else {
-            valuApi.addEventListener(ValuApi.API_READY, async (e) => {
-                setValuApi(valuApi);
+            api.addEventListener(ValuApi.API_READY, () => {
+                setValuApi(api!);
             });
         }
     }, []);
+
     return valuApi;
 };

@@ -18,6 +18,10 @@ export default function SampleApiCalls() {
 
 
   const OpenCurrentUserChat = async () => {
+    if(!valuApi) {
+      return;
+    }
+
     const usersApi = await valuApi.getApi('users')
     const currentUser = await usersApi.run('current');
     if(!currentUser) {

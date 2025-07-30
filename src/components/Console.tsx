@@ -6,11 +6,13 @@ import {Button} from "@/components/ui/button"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select"
 import {Loader2, Send} from "lucide-react"
 
-import {ValuApi, ValuApplication, Intent, APIPointer} from "@arkeytyp/valu-api";
+import {ValuApplication, Intent, APIPointer} from "@arkeytyp/valu-api";
 import {useValuAPI} from "@/Hooks/useValuApi.tsx";
 
+type ConsoleType = typeof CONSOLE_IN | typeof CONSOLE_OUT | typeof CONSOLE_ERROR;
+
 type ConsoleEntry = {
-  type: "input" | "output" | "error"
+  type: ConsoleType
   content: string
 }
 
@@ -30,7 +32,7 @@ export function Console() {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const apiPointer = useRef<APIPointer>(null)
+  const apiPointer = useRef<APIPointer | null>(null);
 
 
   useEffect(() => {
@@ -111,7 +113,11 @@ export function Console() {
         addToConsole(CONSOLE_OUT, `Api context set: ${apiPointer.current.apiName} v${apiPointer.current.version}`);
       } catch (error) {
         apiPointer.current = null;
-        addToConsole(CONSOLE_ERROR, error.message);
+        if (error instanceof Error) {
+          addToConsole(CONSOLE_ERROR, error.message);
+        } else {
+          addToConsole(CONSOLE_ERROR, String(error));
+        }
         addToConsole(CONSOLE_OUT, `Api context cleared`);
       } finally {
         setIsLoading('');
@@ -179,11 +185,12 @@ function greet(name) {
       }),
   }
 
-  const addToConsole = (type, content) => {
+
+  const addToConsole = (type: ConsoleType, content: string) => {
     setConsoleEntries((prev) => [
       ...prev,
-      {type: type, content: content},
-    ])
+      { type, content },
+    ]);
   };
 
   const handleExecute = async () => {
@@ -238,7 +245,7 @@ function greet(name) {
           }
 
         } else {
-          response = await valuApi.runConsoleCommand(cmd);
+          response = await valuApi?.runConsoleCommand(cmd);
         }
 
         addToConsole(CONSOLE_OUT, response);
@@ -282,7 +289,7 @@ function greet(name) {
   return (
     <div className="bg-gray-100 p-4 rounded-lg mb-8">
       <div className="flex space-x-4 mb-4">
-        <Select onValueChange={setApiName} disabled={isLoading}>
+        <Select onValueChange={setApiName} disabled={isLoading !== ''}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Select API"/>
           </SelectTrigger>
@@ -293,7 +300,7 @@ function greet(name) {
           </SelectContent>
         </Select>
         <Input
-          disabled={isLoading}
+          disabled={isLoading !== ''}
           placeholder="API Version (optional)"
           value={apiVersion}
           onChange={(e) => setApiVersion(e.target.value)}
@@ -326,11 +333,11 @@ function greet(name) {
           onChange={(e) => setCommand(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && !isLoading && handleExecute()}
           className="flex-grow"
-          disabled={isLoading}
+          disabled={isLoading !== ''}
         />
         <Button
           onClick={handleExecute}
-          disabled={isLoading}
+          disabled={isLoading !== ''}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200"
         >
           {isLoading ? (
