@@ -16,7 +16,7 @@ export default function Documentation() {
 
   return (
 
-      <div className="w-full lg:w-1/3 bg-gray-100 p-6 rounded-lg overflow-auto max-h-[calc(100vh-210px)]">
+      <div className="w-full bg-gray-100 p-6 rounded-lg overflow-auto max-h-[calc(100vh-210px)]">
           <h2 className="text-2xl font-bold mb-4">Documentation</h2>
           <div className="prose prose-sm max-w-none">
               <ReactMarkdown>{readme}</ReactMarkdown>
