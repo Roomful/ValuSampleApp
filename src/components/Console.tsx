@@ -51,6 +51,10 @@ export function Console() {
         this.onIntent(intent);
       }
 
+      onUpdateRouterContext(context:string) {
+        addToConsole(CONSOLE_IN, `New Route received ${context}`);
+      }
+
       onIntent (intent: Intent) {
 
         switch (intent.action) {
@@ -66,7 +70,6 @@ export function Console() {
     }
     const appInstance = new ReactValuApp();
     valuApi.setApplication(appInstance);
-
 
     setIsLoading('');
     addToConsole(CONSOLE_IN, 'Connected to Valu App.')

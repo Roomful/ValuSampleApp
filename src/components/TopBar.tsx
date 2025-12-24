@@ -1,42 +1,61 @@
-"use client"
+"use client";
 
-import {useValuAPI} from "@/Hooks/useValuApi.tsx"
-import {useEffect, useState} from "react"
+import { useValuAPI } from "@/Hooks/useValuApi.tsx";
+import { useEffect, useMemo, useState } from "react";
+import { NavLink } from "react-router-dom";
 
-type TabType = "console" | "storage" | "documentation"
+type TopBarProps = {
+  isIFrame: boolean;
+  route?: string; // only used in iframe mode
+  onNavigate?: (path: string) => void; // only used in iframe mode
+};
 
-interface TopBarProps {
-  activeTab: TabType
-  setActiveTab: (tab: TabType) => void
-}
-
-export default function TopBar({activeTab, setActiveTab}: TopBarProps) {
-  const [user, setUser] = useState({name: "John Doe", role: "Developer"})
-  const [userIcon, setUserIcon] = useState("")
-  const valuApi = useValuAPI()
+export default function TopBar({ isIFrame, route = "/console", onNavigate }: TopBarProps) {
+  const [user, setUser] = useState({ name: "John Doe", role: "Developer" });
+  const [userIcon, setUserIcon] = useState("");
+  const valuApi = useValuAPI();
 
   useEffect(() => {
-    if (!valuApi) return
+    if (!valuApi) return;
 
     const getUserInfo = async () => {
-      const usersApi = await valuApi.getApi("users")
-      const currentUser = await usersApi.run("current")
+      const usersApi = await valuApi.getApi("users");
+      const currentUser = await usersApi.run("current");
 
       if (currentUser) {
-        const name = `${currentUser.firstName} ${currentUser.lastName}`
-        const role = currentUser.companyTitle
+        const name = `${currentUser.firstName} ${currentUser.lastName}`;
+        const role = currentUser.companyTitle;
 
-        setUser({name, role})
+        setUser({ name, role });
 
-        const icon = await usersApi.run("get-icon", {userId: currentUser.id})
-        setUserIcon(icon)
+        const icon = await usersApi.run("get-icon", { userId: currentUser.id });
+        setUserIcon(icon);
       }
-    }
+    };
 
     if (valuApi.connected) {
-      getUserInfo()
+      getUserInfo();
     }
-  }, [valuApi])
+  }, [valuApi]);
+
+  const tabClass = (active: boolean) =>
+    `px-4 py-2 font-medium transition-colors rounded ${
+      active ? "bg-white/20 text-white" : "text-white/70 hover:text-white hover:bg-white/10"
+    }`;
+
+  // iframe active tab detection
+  const active = useMemo(() => {
+    const r = route || "/console";
+    return {
+      console: r === "/" || r === "/console" || r.startsWith("/console/"),
+      storage: r === "/storage" || r.startsWith("/storage/"),
+      docs: r === "/documentation" || r.startsWith("/documentation/"),
+    };
+  }, [route]);
+
+  const go = (path: string) => {
+    if (onNavigate) onNavigate(path);
+  };
 
   return (
     <header className="bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md">
@@ -46,13 +65,9 @@ export default function TopBar({activeTab, setActiveTab}: TopBarProps) {
           <div className="flex items-center space-x-2">
             <div className="h-10 w-10 flex items-center justify-center bg-gray-200 rounded-full overflow-hidden">
               {!userIcon ? (
-                <span className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-gray-600"></span>
+                <span className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-gray-600" />
               ) : (
-                <img
-                  src={userIcon}
-                  alt="User Icon"
-                  className="h-full w-full object-cover"
-                />
+                <img src={userIcon} alt="User Icon" className="h-full w-full object-cover" />
               )}
             </div>
 
@@ -64,36 +79,31 @@ export default function TopBar({activeTab, setActiveTab}: TopBarProps) {
 
           {/* Tabs navigation */}
           <nav className="flex gap-1">
-            <button
-              onClick={() => setActiveTab("console")}
-              className={`px-4 py-2 font-medium transition-colors rounded ${
-                activeTab === "console"
-                  ? "bg-white/20 text-white"
-                  : "text-white/70 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              Console
-            </button>
-            <button
-              onClick={() => setActiveTab("storage")}
-              className={`px-4 py-2 font-medium transition-colors rounded ${
-                activeTab === "storage"
-                  ? "bg-white/20 text-white"
-                  : "text-white/70 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              Storage
-            </button>
-            <button
-              onClick={() => setActiveTab("documentation")}
-              className={`px-4 py-2 font-medium transition-colors rounded ${
-                activeTab === "documentation"
-                  ? "bg-white/20 text-white"
-                  : "text-white/70 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              Documentation
-            </button>
+            {!isIFrame ? (
+              <>
+                <NavLink to="/console" className={({ isActive }) => tabClass(isActive)}>
+                  Console
+                </NavLink>
+                <NavLink to="/storage" className={({ isActive }) => tabClass(isActive)}>
+                  Storage
+                </NavLink>
+                <NavLink to="/documentation" className={({ isActive }) => tabClass(isActive)}>
+                  Documentation
+                </NavLink>
+              </>
+            ) : (
+              <>
+                <button type="button" className={tabClass(active.console)} onClick={() => go("/console")}>
+                  Console
+                </button>
+                <button type="button" className={tabClass(active.storage)} onClick={() => go("/storage")}>
+                  Storage
+                </button>
+                <button type="button" className={tabClass(active.docs)} onClick={() => go("/documentation")}>
+                  Documentation
+                </button>
+              </>
+            )}
           </nav>
 
           {/* App title */}
@@ -101,5 +111,5 @@ export default function TopBar({activeTab, setActiveTab}: TopBarProps) {
         </div>
       </div>
     </header>
-  )
+  );
 }
