@@ -2,7 +2,7 @@
 
 import {useState, useEffect, useRef} from "react"
 import {Button} from "@/components/ui/button"
-import {Trash2, Upload, File, FileText, Image as ImageIcon, FileCode, Archive, Loader2} from "lucide-react"
+import {Trash2, Upload, File, FileText, Image as ImageIcon, FileCode, Archive, Loader2, Search} from "lucide-react"
 import {useValuAPI} from "@/Hooks/useValuApi.tsx"
 import {Intent} from "@arkeytyp/valu-api"
 
@@ -15,6 +15,8 @@ type StorageFile = {
   data?: string // base64 or url
 }
 
+type StorageScope = "app-storage" | "community" | "channel" | "post" | "room" | "room-prop"
+
 export default function ApplicationStorage() {
   const [files, setFiles] = useState<StorageFile[]>([])
   const [hoveredFile, setHoveredFile] = useState<string | null>(null)
@@ -26,12 +28,21 @@ export default function ApplicationStorage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const valuApi = useValuAPI()
 
+  // Scope state (shared for search and upload)
+  const [scope, setScope] = useState<StorageScope>("app-storage")
+  const [communityId, setCommunityId] = useState("")
+  const [channelId, setChannelId] = useState("")
+  const [postId, setPostId] = useState("")
+  const [roomId, setRoomId] = useState("")
+  const [propId, setPropId] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+
   useEffect(() => {
     loadFiles()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valuApi])
 
-  const loadFiles = async () => {
+  const loadFiles = async (query?: string) => {
     setIsLoading(true)
     try {
       if (!valuApi?.connected) {
@@ -46,16 +57,47 @@ export default function ApplicationStorage() {
           setFiles(filesWithDates)
         }
       } else {
-        // Load from Valu API storage
-        const intent = new Intent("ApplicationStorage", "resource-search", {
-          size: 10,
-        })
+        // Build search params based on scope
+        const searchParams: Record<string, unknown> = {
+          limit: 10,
+        }
+
+        // Add scope-specific parameters
+        if (scope === "post") {
+          if (communityId) searchParams.communityId = communityId
+          if (channelId) searchParams.channelId = channelId
+          if (postId) searchParams.postId = postId
+        } else if (scope === "channel") {
+          if (channelId) searchParams.channelId = channelId
+        } else if (scope === "community") {
+          if (communityId) searchParams.communityId = communityId
+        } else if (scope === "room-prop") {
+          if (roomId) searchParams.roomId = roomId
+          if (propId) searchParams.propId = propId
+        } else if (scope === "room") {
+          if (roomId) searchParams.roomId = roomId
+        }
+        // app-storage: no additional params needed
+
+        // Add search query if provided
+        const effectiveQuery = query ?? searchQuery
+        if (effectiveQuery) {
+          searchParams.query = effectiveQuery
+        }
+
+        // Load from Valu API storage using resource-search
+        const intent = new Intent("CMS", "resource-search", searchParams)
         const result = await valuApi.callService(intent)
 
-        if (result?.data?.resources) {
+        console.log("CMS search result:", result)
+
+        // Handle different response structures (regular search vs post load)
+        const resources = result?.data?.resources || result?.data?.post?.resources || result?.data?.attachments || []
+
+        if (resources.length > 0) {
           const loadedFiles: StorageFile[] = []
 
-          for (const resource of result.data.resources) {
+          for (const resource of resources) {
             const getUrlIntent = new Intent("Resources", "get-thumbnail-url", {
               resourceId: resource.id,
               thumbnailSize: 256,
@@ -64,9 +106,9 @@ export default function ApplicationStorage() {
 
             const file: StorageFile = {
               id: resource.id,
-              name: resource.title,
-              size: resource.metadata?.fileSize || 0,
-              type: resource.metadata?.contentType || "application/octet-stream",
+              name: resource.title || resource.name || "Unnamed",
+              size: resource.metadata?.fileSize || resource.size || 0,
+              type: resource.metadata?.contentType || resource.type || "application/octet-stream",
               uploadedAt: resource.updated ? new Date(resource.updated) : new Date(),
               data: urlResult?.url || undefined,
             }
@@ -75,8 +117,10 @@ export default function ApplicationStorage() {
           }
 
           setFiles(loadedFiles)
+        } else if (result?.error?.status) {
+          console.error("Error loading resources:", result.error)
+          setFiles([])
         } else {
-          console.error("Error loading resources:", result?.error)
           setFiles([])
         }
       }
@@ -150,8 +194,53 @@ export default function ApplicationStorage() {
         saveFiles(updatedFiles)
         setIsUploading(false)
       } else {
-        // Upload to Valu API
-        const intent = new Intent("ApplicationStorage", "resource-upload", {files: fileList})
+        // Build upload params based on target
+        const intentParams: Record<string, unknown> = { files: fileList }
+
+        // Add scope-specific params (same as search scope)
+        if (scope === "post") {
+          if (!communityId || !channelId || !postId) {
+            alert("Please enter Community ID, Channel ID, and Post ID for post upload")
+            setIsUploading(false)
+            return
+          }
+          intentParams.communityId = communityId
+          intentParams.channelId = channelId
+          intentParams.postId = postId
+        } else if (scope === "channel") {
+          if (!channelId) {
+            alert("Please enter a Channel ID for channel upload")
+            setIsUploading(false)
+            return
+          }
+          intentParams.channelId = channelId
+        } else if (scope === "community") {
+          if (!communityId) {
+            alert("Please enter a Community ID for community upload")
+            setIsUploading(false)
+            return
+          }
+          intentParams.communityId = communityId
+        } else if (scope === "room-prop") {
+          if (!roomId || !propId) {
+            alert("Please enter Room ID and Prop ID for room prop upload")
+            setIsUploading(false)
+            return
+          }
+          intentParams.roomId = roomId
+          intentParams.propId = propId
+        } else if (scope === "room") {
+          if (!roomId) {
+            alert("Please enter a Room ID for room upload")
+            setIsUploading(false)
+            return
+          }
+          intentParams.roomId = roomId
+        }
+        // app-storage: no additional params needed
+
+        // Upload to Valu API using unified resource-upload action
+        const intent = new Intent("CMS", "resource-upload", intentParams)
         const result = await valuApi.callService(intent)
 
         console.log("Upload result:", result)
@@ -195,9 +284,24 @@ export default function ApplicationStorage() {
         const updatedFiles = files.filter((f) => f.id !== fileId)
         saveFiles(updatedFiles)
       } else {
-        const intent = new Intent("ApplicationStorage", "resource-delete", {
+        // Build delete params based on scope
+        const deleteParams: Record<string, unknown> = {
           resourceId: fileId,
-        })
+        }
+
+        // For post scope, pass IDs so CMS removes resource from post (not delete)
+        if (scope === "post" && communityId && channelId && postId) {
+          deleteParams.communityId = communityId
+          deleteParams.channelId = channelId
+          deleteParams.postId = postId
+        } else if (scope === "room-prop" && roomId && propId) {
+          deleteParams.roomId = roomId
+          deleteParams.propId = propId
+        } else if (scope === "room" && roomId) {
+          deleteParams.roomId = roomId
+        }
+
+        const intent = new Intent("CMS", "resource-delete", deleteParams)
         const result = await valuApi.callService(intent)
         if (result?.error?.status) {
           console.error("Delete error:", result.error)
@@ -221,7 +325,9 @@ export default function ApplicationStorage() {
     setSelectedFile(selectedFile?.id === file.id ? null : file)
   }
 
-  const handleCopyPublicUrl = async () => {
+  type UrlType = "public" | "best-view" | "direct"
+
+  const handleCopyUrl = async (urlType: UrlType) => {
     if (!selectedFile) return
     if (!navigator.clipboard) {
       alert("Clipboard API is not available in this browser")
@@ -233,10 +339,16 @@ export default function ApplicationStorage() {
       let urlToCopy: string | undefined
 
       if (valuApi?.connected) {
-        const publicUrlIntent = new Intent("Resources", "generate-public-url", {
+        const actionMap: Record<UrlType, string> = {
+          "public": "generate-public-url",
+          "best-view": "generate-best-view-url",
+          "direct": "generate-direct-public-url",
+        }
+
+        const urlIntent = new Intent("Resources", actionMap[urlType], {
           resourceId: selectedFile.id,
         })
-        urlToCopy = await valuApi.callService(publicUrlIntent)
+        urlToCopy = await valuApi.callService(urlIntent)
       } else {
         // Demo mode: best-effort – copy data if it looks like a URL
         if (selectedFile.data && (selectedFile.data.startsWith("http") || selectedFile.data.startsWith("data:"))) {
@@ -245,12 +357,18 @@ export default function ApplicationStorage() {
       }
 
       if (!urlToCopy) {
-        alert("Unable to get public URL")
+        alert("Unable to get URL")
         return
       }
 
       await navigator.clipboard.writeText(urlToCopy)
-      alert("Public URL copied to clipboard")
+
+      const labelMap: Record<UrlType, string> = {
+        "public": "Public URL",
+        "best-view": "Best View URL",
+        "direct": "Direct URL",
+      }
+      alert(`${labelMap[urlType]} copied to clipboard`)
     } catch (err) {
       console.error("Copy URL error:", err)
       alert("Error generating or copying URL")
@@ -259,14 +377,140 @@ export default function ApplicationStorage() {
     }
   }
 
+  const handleSearch = () => {
+    loadFiles(searchQuery)
+  }
+
   return (
     <div className="bg-gray-100 p-6 rounded-lg">
       <h2 className="text-2xl font-bold mb-4">Application Storage</h2>
       <p className="text-sm text-gray-600 mb-6">
         {valuApi?.connected
-          ? "Manage files stored in Valu API application storage"
+          ? "Manage files stored in Valu API - supports app storage, community channels, and community posts"
           : "Demo mode: Files are stored in browser localStorage"}
       </p>
+
+      {/* Scope Controls - Only show when connected */}
+      {valuApi?.connected && (
+        <div className="bg-white rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            Storage Scope
+          </h3>
+          <p className="text-xs text-gray-500 mb-3">Select where to search and upload files</p>
+          <div className="flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 font-medium mb-1">Scope</label>
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as StorageScope)}
+                className="px-3 py-2 border rounded-md text-sm bg-white"
+              >
+                <option value="app-storage">App Storage</option>
+                <option value="community">Community</option>
+                <option value="channel">Channel</option>
+                <option value="post">Post</option>
+                <option value="room">Room</option>
+                <option value="room-prop">Room Prop</option>
+              </select>
+            </div>
+
+            {(scope === "community" || scope === "post") && (
+              <div>
+                <label className="block text-xs text-gray-500 font-medium mb-1">Community ID</label>
+                <input
+                  type="text"
+                  value={communityId}
+                  onChange={(e) => setCommunityId(e.target.value)}
+                  placeholder="Enter community ID"
+                  className="px-3 py-2 border rounded-md text-sm w-48"
+                />
+              </div>
+            )}
+
+            {(scope === "channel" || scope === "post") && (
+              <div>
+                <label className="block text-xs text-gray-500 font-medium mb-1">Channel ID</label>
+                <input
+                  type="text"
+                  value={channelId}
+                  onChange={(e) => setChannelId(e.target.value)}
+                  placeholder="Enter channel ID"
+                  className="px-3 py-2 border rounded-md text-sm w-48"
+                />
+              </div>
+            )}
+
+            {scope === "post" && (
+              <div>
+                <label className="block text-xs text-gray-500 font-medium mb-1">Post ID</label>
+                <input
+                  type="text"
+                  value={postId}
+                  onChange={(e) => setPostId(e.target.value)}
+                  placeholder="Enter post ID"
+                  className="px-3 py-2 border rounded-md text-sm w-48"
+                />
+              </div>
+            )}
+
+            {(scope === "room" || scope === "room-prop") && (
+              <div>
+                <label className="block text-xs text-gray-500 font-medium mb-1">Room ID</label>
+                <input
+                  type="text"
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value)}
+                  placeholder="Enter room ID"
+                  className="px-3 py-2 border rounded-md text-sm w-48"
+                />
+              </div>
+            )}
+
+            {scope === "room-prop" && (
+              <div>
+                <label className="block text-xs text-gray-500 font-medium mb-1">Prop ID</label>
+                <input
+                  type="text"
+                  value={propId}
+                  onChange={(e) => setPropId(e.target.value)}
+                  placeholder="Enter prop ID"
+                  className="px-3 py-2 border rounded-md text-sm w-48"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs text-gray-500 font-medium mb-1">Search Query</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name..."
+                className="px-3 py-2 border rounded-md text-sm w-48"
+              />
+            </div>
+
+            <Button
+              onClick={handleSearch}
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  Search
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-6">
         {/* Files Grid */}
@@ -353,6 +597,22 @@ export default function ApplicationStorage() {
           {/* Upload Area */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Upload Files</h3>
+
+            {/* Upload destination info - Only show when connected */}
+            {valuApi?.connected && (
+              <div className="bg-blue-50 rounded-lg p-3 mb-4 border border-blue-200">
+                <p className="text-xs text-blue-700">
+                  <span className="font-medium">Upload to: </span>
+                  {scope === "app-storage" && "App Storage"}
+                  {scope === "community" && `Community (${communityId || "ID required"})`}
+                  {scope === "channel" && `Channel (${channelId || "ID required"})`}
+                  {scope === "post" && `Post (${postId || "IDs required"})`}
+                  {scope === "room" && `Room (${roomId || "ID required"})`}
+                  {scope === "room-prop" && `Room Prop (${roomId && propId ? `${roomId}/${propId}` : "IDs required"})`}
+                </p>
+              </div>
+            )}
+
             <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
@@ -439,11 +699,13 @@ export default function ApplicationStorage() {
                   </p>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
+                  <p className="text-xs text-gray-500 font-medium">Copy URL</p>
                   <Button
                     size="sm"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={handleCopyPublicUrl}
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleCopyUrl("public")}
                     disabled={isCopyingUrl}
                   >
                     {isCopyingUrl ? (
@@ -452,8 +714,26 @@ export default function ApplicationStorage() {
                         Copying...
                       </>
                     ) : (
-                      <>Copy Public URL</>
+                      <>Public URL (Preview)</>
                     )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleCopyUrl("best-view")}
+                    disabled={isCopyingUrl}
+                  >
+                    Best View URL
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => handleCopyUrl("direct")}
+                    disabled={isCopyingUrl}
+                  >
+                    Direct URL
                   </Button>
                   {!valuApi?.connected && (
                     <p className="mt-1 text-[11px] text-gray-500">

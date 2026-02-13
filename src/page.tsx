@@ -22,8 +22,9 @@ export default function Home() {
   const isIFrame = useMemo(() => window.self !== window.top, []);
   const valuApi = useValuAPI();
 
-  // iframe-only routing state
-  const [route, setRoute] = useState("/console");
+  // iframe-only routing state – seed from the actual URL so the
+  // page Valu requested (e.g. /documentation) renders immediately
+  const [route, setRoute] = useState(() => normalizeRoute(window.location.pathname));
 
 
   // iFrame: Valu -> UI route updates
