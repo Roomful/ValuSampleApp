@@ -15,7 +15,7 @@ type StorageFile = {
   data?: string // base64 or url
 }
 
-type StorageScope = "app-storage" | "community" | "channel" | "post" | "room" | "room-prop"
+type StorageScope = "app-storage" | "community" | "community-channel" | "directory" | "post" | "room" | "room-prop"
 
 export default function ApplicationStorage() {
   const [files, setFiles] = useState<StorageFile[]>([])
@@ -35,6 +35,7 @@ export default function ApplicationStorage() {
   const [postId, setPostId] = useState("")
   const [roomId, setRoomId] = useState("")
   const [propId, setPropId] = useState("")
+  const [directoryId, setDirectoryId] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
@@ -44,6 +45,8 @@ export default function ApplicationStorage() {
 
   const loadFiles = async (query?: string) => {
     setIsLoading(true)
+    setFiles([])
+    setSelectedFile(null)
     try {
       if (!valuApi?.connected) {
         // Demo mode - load from localStorage
@@ -67,8 +70,11 @@ export default function ApplicationStorage() {
           if (communityId) searchParams.communityId = communityId
           if (channelId) searchParams.channelId = channelId
           if (postId) searchParams.postId = postId
-        } else if (scope === "channel") {
+        } else if (scope === "community-channel") {
+          if (communityId) searchParams.communityId = communityId
           if (channelId) searchParams.channelId = channelId
+        } else if (scope === "directory") {
+          if (directoryId) searchParams.directoryId = directoryId
         } else if (scope === "community") {
           if (communityId) searchParams.communityId = communityId
         } else if (scope === "room-prop") {
@@ -207,13 +213,21 @@ export default function ApplicationStorage() {
           intentParams.communityId = communityId
           intentParams.channelId = channelId
           intentParams.postId = postId
-        } else if (scope === "channel") {
-          if (!channelId) {
-            alert("Please enter a Channel ID for channel upload")
+        } else if (scope === "community-channel") {
+          if (!communityId || !channelId) {
+            alert("Please enter Community ID and Channel ID for community channel upload")
             setIsUploading(false)
             return
           }
+          intentParams.communityId = communityId
           intentParams.channelId = channelId
+        } else if (scope === "directory") {
+          if (!directoryId) {
+            alert("Please enter a Directory ID for directory upload")
+            setIsUploading(false)
+            return
+          }
+          intentParams.directoryId = directoryId
         } else if (scope === "community") {
           if (!communityId) {
             alert("Please enter a Community ID for community upload")
@@ -408,14 +422,15 @@ export default function ApplicationStorage() {
               >
                 <option value="app-storage">App Storage</option>
                 <option value="community">Community</option>
-                <option value="channel">Channel</option>
+                <option value="community-channel">Community Channel</option>
+                <option value="directory">Directory</option>
                 <option value="post">Post</option>
                 <option value="room">Room</option>
                 <option value="room-prop">Room Prop</option>
               </select>
             </div>
 
-            {(scope === "community" || scope === "post") && (
+            {(scope === "community" || scope === "community-channel" || scope === "post") && (
               <div>
                 <label className="block text-xs text-gray-500 font-medium mb-1">Community ID</label>
                 <input
@@ -428,7 +443,7 @@ export default function ApplicationStorage() {
               </div>
             )}
 
-            {(scope === "channel" || scope === "post") && (
+            {(scope === "community-channel" || scope === "post") && (
               <div>
                 <label className="block text-xs text-gray-500 font-medium mb-1">Channel ID</label>
                 <input
@@ -436,6 +451,19 @@ export default function ApplicationStorage() {
                   value={channelId}
                   onChange={(e) => setChannelId(e.target.value)}
                   placeholder="Enter channel ID"
+                  className="px-3 py-2 border rounded-md text-sm w-48"
+                />
+              </div>
+            )}
+
+            {scope === "directory" && (
+              <div>
+                <label className="block text-xs text-gray-500 font-medium mb-1">Directory ID</label>
+                <input
+                  type="text"
+                  value={directoryId}
+                  onChange={(e) => setDirectoryId(e.target.value)}
+                  placeholder="Enter directory ID"
                   className="px-3 py-2 border rounded-md text-sm w-48"
                 />
               </div>
@@ -605,7 +633,8 @@ export default function ApplicationStorage() {
                   <span className="font-medium">Upload to: </span>
                   {scope === "app-storage" && "App Storage"}
                   {scope === "community" && `Community (${communityId || "ID required"})`}
-                  {scope === "channel" && `Channel (${channelId || "ID required"})`}
+                  {scope === "community-channel" && `Community Channel (${communityId && channelId ? `${communityId}/${channelId}` : "IDs required"})`}
+                  {scope === "directory" && `Directory (${directoryId || "ID required"})`}
                   {scope === "post" && `Post (${postId || "IDs required"})`}
                   {scope === "room" && `Room (${roomId || "ID required"})`}
                   {scope === "room-prop" && `Room Prop (${roomId && propId ? `${roomId}/${propId}` : "IDs required"})`}
