@@ -2,7 +2,7 @@
 
 import {useState, useEffect, useRef, useCallback, useSyncExternalStore} from "react"
 import {Button} from "@/components/ui/button"
-import {MoreVertical, Trash2, Upload, File, FileText, Image as ImageIcon, FileCode, Archive, Loader2, Search, X, FolderOpen, Eye, ExternalLink, Video, Link2, Play} from "lucide-react"
+import {MoreVertical, Trash2, Upload, File, FileText, Image as ImageIcon, FileCode, Archive, Loader2, Search, X, FolderOpen, Eye, ExternalLink, Video, Link2, Play, ChevronRight, Home} from "lucide-react"
 import {useValuAPI} from "@/Hooks/useValuApi.tsx"
 import {Intent} from "@arkeytyp/valu-api"
 
@@ -36,6 +36,26 @@ export default function ApplicationStorage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const valuApi = useValuAPI()
+
+  // Browse mode state
+  type InputMode = "browse" | "manual"
+  const [inputMode, setInputMode] = useState<InputMode>("browse")
+  const [browseLoading, setBrowseLoading] = useState(false)
+
+  // Room browse
+  const [browseRooms, setBrowseRooms] = useState<any[]>([])
+  const [browseRoomFilter, setBrowseRoomFilter] = useState("all")
+  const [browseSelectedRoom, setBrowseSelectedRoom] = useState<any | null>(null)
+  const [browseProps, setBrowseProps] = useState<any[]>([])
+  const [browseSelectedProp, setBrowseSelectedProp] = useState<any | null>(null)
+
+  // Community browse
+  const [browseCommunities, setBrowseCommunities] = useState<any[]>([])
+  const [browseSelectedCommunity, setBrowseSelectedCommunity] = useState<any | null>(null)
+  const [browseChannels, setBrowseChannels] = useState<any[]>([])
+  const [browseSelectedChannel, setBrowseSelectedChannel] = useState<any | null>(null)
+  const [browsePosts, setBrowsePosts] = useState<any[]>([])
+  const [browseSelectedPost, setBrowseSelectedPost] = useState<any | null>(null)
 
   // Close context menu on click outside
   useEffect(() => {
@@ -606,6 +626,172 @@ export default function ApplicationStorage() {
     }
   }
 
+  // --- Browse mode data fetchers ---
+  const loadBrowseRooms = async (filter: string) => {
+    if (!valuApi?.connected) return
+    setBrowseLoading(true)
+    try {
+      const intent = new Intent("Rooms", "search-rooms", { filter, size: 50 })
+      const result = await valuApi.callService(intent)
+      setBrowseRooms(result?.rooms || [])
+    } catch (e) { console.error("Browse rooms error:", e) }
+    setBrowseLoading(false)
+  }
+
+  const loadBrowseRoomProps = async (rid: string) => {
+    if (!valuApi?.connected) return
+    setBrowseLoading(true)
+    try {
+      const intent = new Intent("Rooms", "get-room-props", { roomId: rid })
+      const result = await valuApi.callService(intent)
+      setBrowseProps(Array.isArray(result) ? result : [])
+    } catch (e) { console.error("Browse props error:", e) }
+    setBrowseLoading(false)
+  }
+
+  const loadBrowseCommunities = async () => {
+    if (!valuApi?.connected) return
+    setBrowseLoading(true)
+    try {
+      const intent = new Intent("Community", "search-communities", { limit: 50 })
+      const result = await valuApi.callService(intent)
+      setBrowseCommunities(result?.communities || [])
+    } catch (e) { console.error("Browse communities error:", e) }
+    setBrowseLoading(false)
+  }
+
+  const loadBrowseChannels = async (cid: string) => {
+    if (!valuApi?.connected) return
+    setBrowseLoading(true)
+    try {
+      const intent = new Intent("Community", "get-channels", { communityId: cid })
+      const result = await valuApi.callService(intent)
+      setBrowseChannels(result?.channels || [])
+    } catch (e) { console.error("Browse channels error:", e) }
+    setBrowseLoading(false)
+  }
+
+  const loadBrowsePosts = async (chId: string) => {
+    if (!valuApi?.connected) return
+    setBrowseLoading(true)
+    try {
+      const intent = new Intent("Community", "get-posts", { channelId: chId, limit: 20 })
+      const result = await valuApi.callService(intent)
+      setBrowsePosts(result?.messages || [])
+    } catch (e) { console.error("Browse posts error:", e) }
+    setBrowseLoading(false)
+  }
+
+  // Browse category — simplified top-level: only 3 options
+  type BrowseCategory = "app-storage" | "communities" | "rooms"
+  const [browseCategory, setBrowseCategory] = useState<BrowseCategory>("rooms")
+
+  // Auto-load browse data when category or mode changes
+  useEffect(() => {
+    if (inputMode !== "browse" || !valuApi?.connected) return
+    // Reset all browse state
+    setBrowseSelectedRoom(null)
+    setBrowseSelectedProp(null)
+    setBrowseProps([])
+    setBrowseSelectedCommunity(null)
+    setBrowseSelectedChannel(null)
+    setBrowseSelectedPost(null)
+    setBrowseChannels([])
+    setBrowsePosts([])
+
+    if (browseCategory === "rooms") {
+      loadBrowseRooms(browseRoomFilter)
+    } else if (browseCategory === "communities") {
+      loadBrowseCommunities()
+    } else if (browseCategory === "app-storage") {
+      navigateTo({ scope: "app-storage" })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseCategory, inputMode, valuApi?.connected])
+
+  // Browse selection handlers
+  const handleBrowseSelectRoom = (room: any) => {
+    setBrowseSelectedRoom(room)
+    setBrowseSelectedProp(null)
+    setBrowseProps([])
+    setRoomId(room.id)
+    // Load room files and also load props for drilling deeper
+    navigateTo({ scope: "room", roomId: room.id })
+    loadBrowseRoomProps(room.id)
+  }
+
+  const handleBrowseSelectProp = (prop: any) => {
+    setBrowseSelectedProp(prop)
+    setPropId(prop.id)
+    navigateTo({ scope: "room-prop", roomId: browseSelectedRoom?.id, propId: prop.id })
+  }
+
+  const handleBrowseSelectCommunity = (community: any) => {
+    const cid = community.communityId || community.id
+    setBrowseSelectedCommunity(community)
+    setBrowseSelectedChannel(null)
+    setBrowseSelectedPost(null)
+    setBrowseChannels([])
+    setBrowsePosts([])
+    setCommunityId(cid)
+    // Load community files and also load channels for drilling deeper
+    navigateTo({ scope: "community", communityId: cid })
+    loadBrowseChannels(cid)
+  }
+
+  const handleBrowseSelectChannel = (channel: any) => {
+    const chId = channel.originId || channel.channelId || channel.id
+    setBrowseSelectedChannel(channel)
+    setBrowseSelectedPost(null)
+    setBrowsePosts([])
+    setChannelId(chId)
+    // Load channel files and also load posts for drilling deeper
+    const cid = browseSelectedCommunity?.communityId || browseSelectedCommunity?.id
+    navigateTo({ scope: "community-channel", communityId: cid, channelId: chId })
+    loadBrowsePosts(chId)
+  }
+
+  const handleBrowseSelectPost = (post: any) => {
+    const pid = post.messageId || post.id
+    setBrowseSelectedPost(post)
+    setPostId(pid)
+    navigateTo({
+      scope: "post",
+      communityId: browseSelectedCommunity?.communityId || browseSelectedCommunity?.id,
+      channelId: browseSelectedChannel?.originId || browseSelectedChannel?.channelId || browseSelectedChannel?.id,
+      postId: pid
+    })
+  }
+
+  const handleBrowseRoomFilterChange = (filter: string) => {
+    setBrowseRoomFilter(filter)
+    setBrowseSelectedRoom(null)
+    setBrowseSelectedProp(null)
+    setBrowseProps([])
+    loadBrowseRooms(filter)
+  }
+
+  // Browse breadcrumb reset handlers
+  const browseResetToRooms = () => {
+    setBrowseSelectedRoom(null)
+    setBrowseSelectedProp(null)
+    setBrowseProps([])
+  }
+
+  const browseResetToCommunities = () => {
+    setBrowseSelectedCommunity(null)
+    setBrowseSelectedChannel(null)
+    setBrowseSelectedPost(null)
+    setBrowseChannels([])
+    setBrowsePosts([])
+  }
+
+  const browseResetToChannels = () => {
+    setBrowseSelectedChannel(null)
+    setBrowseSelectedPost(null)
+    setBrowsePosts([])
+  }
+
   const handleSearch = () => {
     navigateTo({ q: searchQueryInput || null })
   }
@@ -622,107 +808,349 @@ export default function ApplicationStorage() {
       {/* Scope Controls - Only show when connected */}
       {valuApi?.connected && (
         <div className="bg-white rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Storage Scope
-          </h3>
-          <p className="text-xs text-gray-500 mb-3">Select where to search and upload files</p>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="block text-xs text-gray-500 font-medium mb-1">Scope</label>
-              <select
-                value={scope}
-                onChange={(e) => setScope(e.target.value as StorageScope)}
-                className="px-3 py-2 border rounded-md text-sm bg-white"
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Storage Scope
+            </h3>
+            <div className="flex rounded-md overflow-hidden border">
+              <button
+                onClick={() => setInputMode("browse")}
+                className={`px-3 py-1 text-sm font-medium transition-colors ${inputMode === "browse" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
               >
-                <option value="app-storage">App Storage</option>
-                <option value="community">Community</option>
-                <option value="community-channel">Community Channel</option>
-                <option value="directory">Directory</option>
-                <option value="post">Post</option>
-                <option value="room">Room</option>
-                <option value="room-prop">Room Prop</option>
-              </select>
+                Browse
+              </button>
+              <button
+                onClick={() => setInputMode("manual")}
+                className={`px-3 py-1 text-sm font-medium transition-colors ${inputMode === "manual" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
+              >
+                Manual
+              </button>
             </div>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">Select where to search and upload files</p>
 
-            {(scope === "community" || scope === "community-channel" || scope === "post") && (
-              <div>
-                <label className="block text-xs text-gray-500 font-medium mb-1">Community ID</label>
-                <input
-                  type="text"
-                  value={communityId}
-                  onChange={(e) => setCommunityId(e.target.value)}
-                  placeholder="Enter community ID"
-                  className="px-3 py-2 border rounded-md text-sm w-48"
-                />
+          {/* Browse Mode */}
+          {inputMode === "browse" && (
+            <div className="mb-3 flex gap-4">
+              {/* Browse category selector */}
+              <div className="shrink-0">
+                <label className="block text-xs text-gray-500 font-medium mb-1">Category</label>
+                <div className="flex flex-col gap-1">
+                  {(["app-storage", "communities", "rooms"] as BrowseCategory[]).map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setBrowseCategory(cat)}
+                      className={`px-3 py-2 text-sm text-left rounded-md transition-colors ${browseCategory === cat ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      {cat === "app-storage" ? "App Storage" : cat === "communities" ? "Communities" : "Rooms"}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
 
-            {(scope === "community-channel" || scope === "post") && (
-              <div>
-                <label className="block text-xs text-gray-500 font-medium mb-1">Channel ID</label>
-                <input
-                  type="text"
-                  value={channelId}
-                  onChange={(e) => setChannelId(e.target.value)}
-                  placeholder="Enter channel ID"
-                  className="px-3 py-2 border rounded-md text-sm w-48"
-                />
+              {/* Browse panel */}
+              <div className="flex-1 min-w-0">
+
+              {browseCategory === "rooms" && (
+                <div>
+                  {/* Breadcrumb */}
+                  <div className="flex items-center gap-1 text-sm text-gray-500 mb-2">
+                    <button onClick={browseResetToRooms} className="hover:text-blue-600 flex items-center gap-1">
+                      <Home className="h-3 w-3" /> Rooms
+                    </button>
+                    {browseSelectedRoom && (
+                      <>
+                        <ChevronRight className="h-3 w-3" />
+                        <button onClick={() => { setBrowseSelectedProp(null); navigateTo({ scope: "room", roomId: browseSelectedRoom.id }) }} className="hover:text-blue-600">
+                          {browseSelectedRoom.name}
+                        </button>
+                      </>
+                    )}
+                    {browseSelectedProp && (
+                      <>
+                        <ChevronRight className="h-3 w-3" />
+                        <span className="text-gray-800 font-medium">{browseSelectedProp.name}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Room filter */}
+                  {!browseSelectedRoom && (
+                    <div className="mb-2">
+                      <select
+                        value={browseRoomFilter}
+                        onChange={(e) => handleBrowseRoomFilterChange(e.target.value)}
+                        className="px-2 py-1 border rounded text-sm bg-white"
+                      >
+                        <option value="all">All Rooms</option>
+                        <option value="favourite">Favourites</option>
+                        <option value="open">Open</option>
+                        <option value="invites">Invitations</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Rooms list */}
+                  {!browseSelectedRoom && (
+                    <div className="max-h-48 overflow-y-auto border rounded">
+                      {browseLoading ? (
+                        <div className="p-4 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                      ) : browseRooms.length === 0 ? (
+                        <div className="p-4 text-center text-gray-400 text-sm">No rooms found</div>
+                      ) : browseRooms.map((room) => (
+                        <button
+                          key={room.id}
+                          onClick={() => handleBrowseSelectRoom(room)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b last:border-b-0"
+                        >
+                          <span className="truncate">{room.name || room.id}</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Props list — shown after room is selected, drill deeper */}
+                  {browseSelectedRoom && !browseSelectedProp && browseProps.length > 0 && (
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-500 font-medium mb-1">Props in this room</label>
+                      <div className="max-h-48 overflow-y-auto border rounded">
+                        {browseProps.map((prop) => (
+                          <button
+                            key={prop.id}
+                            onClick={() => handleBrowseSelectProp(prop)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b last:border-b-0"
+                          >
+                            <div className="truncate">
+                              <span>{prop.name || prop.id}</span>
+                              {prop.contentCount > 0 && <span className="text-gray-400 ml-2">({prop.contentCount} items)</span>}
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {browseSelectedRoom && !browseSelectedProp && !browseLoading && browseProps.length === 0 && (
+                    <p className="text-xs text-gray-400 mt-2">No props in this room</p>
+                  )}
+                </div>
+              )}
+
+              {browseCategory === "communities" && (
+                <div>
+                  {/* Breadcrumb */}
+                  <div className="flex items-center gap-1 text-sm text-gray-500 mb-2">
+                    <button onClick={browseResetToCommunities} className="hover:text-blue-600 flex items-center gap-1">
+                      <Home className="h-3 w-3" /> Communities
+                    </button>
+                    {browseSelectedCommunity && (
+                      <>
+                        <ChevronRight className="h-3 w-3" />
+                        <button onClick={browseResetToChannels} className="hover:text-blue-600">
+                          {browseSelectedCommunity.communityTitle || browseSelectedCommunity.name || browseSelectedCommunity.communityId}
+                        </button>
+                      </>
+                    )}
+                    {browseSelectedChannel && (
+                      <>
+                        <ChevronRight className="h-3 w-3" />
+                        <button onClick={() => { setBrowseSelectedPost(null); const cid = browseSelectedCommunity?.communityId || browseSelectedCommunity?.id; const chId = browseSelectedChannel?.originId || browseSelectedChannel?.channelId || browseSelectedChannel?.id; navigateTo({ scope: "community-channel", communityId: cid, channelId: chId }) }} className="hover:text-blue-600">
+                          {browseSelectedChannel.title || browseSelectedChannel.originId}
+                        </button>
+                      </>
+                    )}
+                    {browseSelectedPost && (
+                      <>
+                        <ChevronRight className="h-3 w-3" />
+                        <span className="text-gray-800 font-medium">{browseSelectedPost.messageTitle || "Post"}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Communities list */}
+                  {!browseSelectedCommunity && (
+                    <div className="max-h-48 overflow-y-auto border rounded">
+                      {browseLoading ? (
+                        <div className="p-4 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                      ) : browseCommunities.length === 0 ? (
+                        <div className="p-4 text-center text-gray-400 text-sm">No communities found</div>
+                      ) : browseCommunities.map((c) => (
+                        <button
+                          key={c.communityId || c.id}
+                          onClick={() => handleBrowseSelectCommunity(c)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b last:border-b-0"
+                        >
+                          <span className="truncate">{c.communityTitle || c.name || c.communityId || c.id}</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Channels list — shown after community selected */}
+                  {browseSelectedCommunity && !browseSelectedChannel && (
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-500 font-medium mb-1">Channels</label>
+                      <div className="max-h-48 overflow-y-auto border rounded">
+                        {browseLoading ? (
+                          <div className="p-4 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                        ) : browseChannels.length === 0 ? (
+                          <div className="p-4 text-center text-gray-400 text-sm">No channels found</div>
+                        ) : browseChannels.map((ch) => (
+                          <button
+                            key={ch.originId || ch.channelId || ch.id}
+                            onClick={() => handleBrowseSelectChannel(ch)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b last:border-b-0"
+                          >
+                            <span className="truncate">{ch.title || ch.originId || ch.id}</span>
+                            <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Posts list — shown after channel selected */}
+                  {browseSelectedChannel && !browseSelectedPost && (
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-500 font-medium mb-1">Posts</label>
+                      <div className="max-h-48 overflow-y-auto border rounded">
+                        {browseLoading ? (
+                          <div className="p-4 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                        ) : browsePosts.length === 0 ? (
+                          <div className="p-4 text-center text-gray-400 text-sm">No posts found</div>
+                        ) : browsePosts.map((p) => (
+                          <button
+                            key={p.messageId || p.id}
+                            onClick={() => handleBrowseSelectPost(p)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b last:border-b-0"
+                          >
+                            <div className="truncate">
+                              <span>{p.messageTitle || "Untitled Post"}</span>
+                              {p.messageBody && <span className="text-gray-400 ml-2 text-xs">— {p.messageBody.substring(0, 40)}...</span>}
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {browseCategory === "app-storage" && (
+                <p className="text-xs text-gray-500 py-4">Showing app-level storage. Files are listed below.</p>
+              )}
+
               </div>
-            )}
+            </div>
+          )}
 
-            {scope === "directory" && (
-              <div>
-                <label className="block text-xs text-gray-500 font-medium mb-1">Directory ID</label>
-                <input
-                  type="text"
-                  value={directoryId}
-                  onChange={(e) => setDirectoryId(e.target.value)}
-                  placeholder="Enter directory ID"
-                  className="px-3 py-2 border rounded-md text-sm w-48"
-                />
+          {/* Manual Mode */}
+          {inputMode === "manual" && (
+            <div className="mb-3">
+              <div className="mb-3">
+                <label className="block text-xs text-gray-500 font-medium mb-1">Scope</label>
+                <select
+                  value={scope}
+                  onChange={(e) => setScope(e.target.value as StorageScope)}
+                  className="px-3 py-2 border rounded-md text-sm bg-white"
+                >
+                  <option value="app-storage">App Storage</option>
+                  <option value="community">Community</option>
+                  <option value="community-channel">Community Channel</option>
+                  <option value="directory">Directory</option>
+                  <option value="post">Post</option>
+                  <option value="room">Room</option>
+                  <option value="room-prop">Room Prop</option>
+                </select>
               </div>
-            )}
+              <div className="flex flex-wrap gap-4 items-end">
+              {(scope === "community" || scope === "community-channel" || scope === "post") && (
+                <div>
+                  <label className="block text-xs text-gray-500 font-medium mb-1">Community ID</label>
+                  <input
+                    type="text"
+                    value={communityId}
+                    onChange={(e) => setCommunityId(e.target.value)}
+                    placeholder="Enter community ID"
+                    className="px-3 py-2 border rounded-md text-sm w-48"
+                  />
+                </div>
+              )}
 
-            {scope === "post" && (
-              <div>
-                <label className="block text-xs text-gray-500 font-medium mb-1">Post ID</label>
-                <input
-                  type="text"
-                  value={postId}
-                  onChange={(e) => setPostId(e.target.value)}
-                  placeholder="Enter post ID"
-                  className="px-3 py-2 border rounded-md text-sm w-48"
-                />
+              {(scope === "community-channel" || scope === "post") && (
+                <div>
+                  <label className="block text-xs text-gray-500 font-medium mb-1">Channel ID</label>
+                  <input
+                    type="text"
+                    value={channelId}
+                    onChange={(e) => setChannelId(e.target.value)}
+                    placeholder="Enter channel ID"
+                    className="px-3 py-2 border rounded-md text-sm w-48"
+                  />
+                </div>
+              )}
+
+              {scope === "directory" && (
+                <div>
+                  <label className="block text-xs text-gray-500 font-medium mb-1">Directory ID</label>
+                  <input
+                    type="text"
+                    value={directoryId}
+                    onChange={(e) => setDirectoryId(e.target.value)}
+                    placeholder="Enter directory ID"
+                    className="px-3 py-2 border rounded-md text-sm w-48"
+                  />
+                </div>
+              )}
+
+              {scope === "post" && (
+                <div>
+                  <label className="block text-xs text-gray-500 font-medium mb-1">Post ID</label>
+                  <input
+                    type="text"
+                    value={postId}
+                    onChange={(e) => setPostId(e.target.value)}
+                    placeholder="Enter post ID"
+                    className="px-3 py-2 border rounded-md text-sm w-48"
+                  />
+                </div>
+              )}
+
+              {(scope === "room" || scope === "room-prop") && (
+                <div>
+                  <label className="block text-xs text-gray-500 font-medium mb-1">Room ID</label>
+                  <input
+                    type="text"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    placeholder="Enter room ID"
+                    className="px-3 py-2 border rounded-md text-sm w-48"
+                  />
+                </div>
+              )}
+
+              {scope === "room-prop" && (
+                <div>
+                  <label className="block text-xs text-gray-500 font-medium mb-1">Prop ID</label>
+                  <input
+                    type="text"
+                    value={propId}
+                    onChange={(e) => setPropId(e.target.value)}
+                    placeholder="Enter prop ID"
+                    className="px-3 py-2 border rounded-md text-sm w-48"
+                  />
+                </div>
+              )}
               </div>
-            )}
+            </div>
+          )}
 
-            {(scope === "room" || scope === "room-prop") && (
-              <div>
-                <label className="block text-xs text-gray-500 font-medium mb-1">Room ID</label>
-                <input
-                  type="text"
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value)}
-                  placeholder="Enter room ID"
-                  className="px-3 py-2 border rounded-md text-sm w-48"
-                />
-              </div>
-            )}
-
-            {scope === "room-prop" && (
-              <div>
-                <label className="block text-xs text-gray-500 font-medium mb-1">Prop ID</label>
-                <input
-                  type="text"
-                  value={propId}
-                  onChange={(e) => setPropId(e.target.value)}
-                  placeholder="Enter prop ID"
-                  className="px-3 py-2 border rounded-md text-sm w-48"
-                />
-              </div>
-            )}
-
+          {/* Search — shared by both modes */}
+          <div className="flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-xs text-gray-500 font-medium mb-1">Search Query</label>
               <input
